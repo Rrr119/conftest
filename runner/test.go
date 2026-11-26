@@ -38,6 +38,17 @@ type TestRunner struct {
 	Combine            bool
 	Quiet              bool
 	Output             string
+	Env                string `mapstructure:"env"`
+	Environment        string `mapstructure:"environment"`
+}
+
+// SelectedEnvironment returns the deployment environment selected through the
+// --env/--environment flags or configuration, if any.
+func (t *TestRunner) SelectedEnvironment() string {
+	if t.Env != "" {
+		return t.Env
+	}
+	return t.Environment
 }
 
 // Run executes the TestRunner, verifying all Rego policies against the given
@@ -81,6 +92,10 @@ func (t *TestRunner) Run(ctx context.Context, fileList []string) (output.CheckRe
 		return nil, fmt.Errorf("load: %w", err)
 	}
 	engine.EnableInterQueryCache()
+
+	if err := engine.SetEnvironment(t.SelectedEnvironment()); err != nil {
+		return nil, fmt.Errorf("set environment: %w", err)
+	}
 
 	if t.Trace {
 		engine.EnableTracing()

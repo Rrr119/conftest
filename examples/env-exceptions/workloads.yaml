@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: debug-shell
+  namespace: ops
+  labels:
+    app: debug-shell
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: debug-shell
+  template:
+    metadata:
+      labels:
+        app: debug-shell
+    spec:
+      containers:
+        - name: debug
+          image: busybox
+          command: ["sleep", "infinity"]
+          securityContext:
+            privileged: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: batch-job
+  namespace: jobs
+  labels:
+    app: batch-job
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: batch-job
+  template:
+    metadata:
+      labels:
+        app: batch-job
+    spec:
+      containers:
+        - name: worker
+          image: batch:latest
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: legacy-agent
+  namespace: ops
+  labels:
+    app: legacy-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: legacy-agent
+  template:
+    metadata:
+      labels:
+        app: legacy-agent
+    spec:
+      containers:
+        - name: agent
+          image: legacy-agent:1.4
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-monitor
+  namespace: monitoring
+  labels:
+    app: node-monitor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: node-monitor
+  template:
+    metadata:
+      labels:
+        app: node-monitor
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: monitor
+          image: monitor:2.0
+          securityContext:
+            privileged: true

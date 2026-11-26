@@ -1,0 +1,17 @@
+{
+  "root": "/home/dev/feedback/uid38821",
+  "B": "/home/dev/feedback/uid38821",
+  "sha": "c5bbfb11c0c09ce3c10f6deab3a535ca9c57c0fb",
+  "wslDistro": "Ubuntu-26.04",
+  "source": {
+    "owner": "open-policy-agent",
+    "repo": "conftest",
+    "sha": "c5bbfb11c0c09ce3c10f6deab3a535ca9c57c0fb"
+  },
+  "fork": {
+    "owner": "Rrr119",
+    "repo": "conftest",
+    "cloneUrl": "https://github.com/Rrr119/conftest.git"
+  },
+  "at": "2026-11-26T03:17:55.907Z"
+}

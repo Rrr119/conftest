@@ -180,6 +180,55 @@ func (e *Engine) EnableInterQueryCache() {
 	e.interQueryCache = cache.NewInterQueryCache(nil)
 }
 
+// SetEnvironment exposes the selected deployment environment to policies as
+// data.environment, data.env and data.conftest.environment. An empty
+// environment is a no-op. An explicit value replaces data loaded from disk so
+// the command line remains authoritative.
+func (e *Engine) SetEnvironment(environment string) error {
+	if environment == "" {
+		return nil
+	}
+	if e.store == nil {
+		e.store = inmem.New()
+	}
+
+	ctx := context.Background()
+	txn, err := e.store.NewTransaction(ctx, storage.WriteParams)
+	if err != nil {
+		return fmt.Errorf("begin environment tx: %w", err)
+	}
+
+	if err := storage.MakeDir(ctx, e.store, txn, storage.Path{"conftest"}); err != nil {
+		e.store.Abort(ctx, txn)
+		return fmt.Errorf("create conftest dir: %w", err)
+	}
+
+	write := func(parts []string, value any) error {
+		path := storage.Path(parts)
+		op := storage.AddOp
+		if _, err := e.store.Read(ctx, txn, path); err == nil {
+			op = storage.ReplaceOp
+		}
+		return e.store.Write(ctx, txn, op, path, value)
+	}
+
+	for _, path := range [][]string{
+		{"environment"},
+		{"env"},
+		{"conftest", "environment"},
+	} {
+		if err := write(path, environment); err != nil {
+			e.store.Abort(ctx, txn)
+			return fmt.Errorf("write environment to %s: %w", path, err)
+		}
+	}
+
+	if err := e.store.Commit(ctx, txn); err != nil {
+		return fmt.Errorf("commit environment tx: %w", err)
+	}
+	return nil
+}
+
 // Check executes all of the loaded policies against the input and returns the results.
 func (e *Engine) Check(ctx context.Context, configs map[string]interface{}, namespace string) (output.CheckResults, error) {
 	var checkResults output.CheckResults
@@ -312,6 +361,7 @@ func (e *Engine) check(ctx context.Context, path string, config any, namespace s
 
 	var rules []string
 	var ruleCount int
+	declaredRules := map[string]bool{}
 	for _, module := range e.Modules() {
 		currentNamespace := strings.Replace(module.Package.Path.String(), "data.", "", 1)
 		if currentNamespace != namespace {
@@ -323,6 +373,7 @@ func (e *Engine) check(ctx context.Context, path string, config any, namespace s
 		// they appear in the policies.
 		for r := range module.Rules {
 			currentRule := module.Rules[r].Head.Name.String()
+			declaredRules[currentRule] = true
 
 			if !isFailure(currentRule) && !isWarning(currentRule) {
 				continue
@@ -340,6 +391,11 @@ func (e *Engine) check(ctx context.Context, path string, config any, namespace s
 			}
 		}
 	}
+
+	// Structured exception entries are indexed once per input so that the
+	// output can identify the exact exception entry that was applied. This is
+	// best-effort and never changes legacy exception matching behavior.
+	exceptionDetails := e.buildExceptionIndex(ctx, inputValue, namespace, declaredRules)
 
 	checkResult := output.CheckResult{
 		FileName:  path,
@@ -367,6 +423,24 @@ func (e *Engine) check(ctx context.Context, path string, config any, namespace s
 				exceptionResult.Message = exceptionQuery
 				exceptions = append(exceptions, exceptionResult)
 			}
+		}
+
+		// When the policy provides structured exception entries for this
+		// rule, report those instead: their message and metadata identify the
+		// exact exception (id, reason, expiry, ...) that was hit. Structured
+		// entries can also gate a rule on their own (e.g. wildcard targets),
+		// so they are looked up even when the legacy query did not match.
+		shortRule := removeRulePrefix(rule)
+		if detailedExceptions := exceptionDetails.lookup(shortRule); len(detailedExceptions) > 0 {
+			for i := range detailedExceptions {
+				metadata := make(map[string]any, len(detailedExceptions[i].Metadata)+1)
+				for key, value := range detailedExceptions[i].Metadata {
+					metadata[key] = value
+				}
+				metadata["query"] = exceptionQuery
+				detailedExceptions[i].Metadata = metadata
+			}
+			exceptions = detailedExceptions
 		}
 
 		ruleQuery := fmt.Sprintf("data.%s.%s", namespace, rule)

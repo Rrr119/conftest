@@ -96,6 +96,8 @@ func NewTestCommand(ctx context.Context) *cobra.Command {
 				"all-namespaces",
 				"combine",
 				"data",
+				"env",
+				"environment",
 				"fail-on-warn",
 				"ignore",
 				"namespace",
@@ -198,6 +200,8 @@ func NewTestCommand(ctx context.Context) *cobra.Command {
 	cmd.Flags().StringSliceP("update", "u", []string{}, "A list of URLs can be provided to the update flag, which will download before the tests run")
 	cmd.Flags().StringSliceP("namespace", "n", []string{"main"}, "Test policies in specific namespaces. Supports glob wildcards (*, ?, [...]) where * matches any sequence of characters including dots. Example: 'k8s.*' matches both k8s.simple and k8s.simple.deployment")
 	cmd.Flags().StringSliceP("data", "d", []string{}, "A list of paths from which data for the rego policies will be recursively loaded")
+	cmd.Flags().String("env", "", "Deployment environment used to scope environment-specific exceptions (exposed as data.environment)")
+	cmd.Flags().String("environment", "", "Alias for --env")
 
 	cmd.Flags().StringSlice("proto-file-dirs", []string{}, "A list of directories containing Protocol Buffer definitions")
 	cmd.Flags().Bool("tls", true, "Use TLS to access the registry")
